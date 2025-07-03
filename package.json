@@ -7,6 +7,7 @@
     "dev": "vite",
     "preview": "vite preview",
     "deploy": "vercel --prod",
+    "build": "vite build",
     "supabase:start": "supabase start",
     "supabase:stop": "supabase stop",
     "supabase:reset": "supabase db reset"
