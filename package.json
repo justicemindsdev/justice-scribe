@@ -1,32 +1,36 @@
 {
   "name": "pdf-reader-ai",
-  "version": "1.0.0",
-  "description": "Advanced PDF Reader with AI Analysis and Supabase Integration",
-  "main": "index.html",
-  "scripts": {
-    "dev": "vite",
-    "preview": "vite preview",
-    "deploy": "vercel --prod",
-    "build": "vite build",
-    "supabase:start": "supabase start",
-    "supabase:stop": "supabase stop",
-    "supabase:reset": "supabase db reset"
-  },
-  "dependencies": {
-    "@supabase/supabase-js": "^2.39.0",
-    "pdf-lib": "^1.17.1",
-    "pdfjs-dist": "^3.11.174",
-    "react": "^18.2.0",
-    "react-dom": "^18.2.0"
-  },
-  "devDependencies": {
-    "vite": "^5.0.0",
-    "@vitejs/plugin-react": "^4.2.0",
-    "typescript": "^5.0.0",
-    "@types/react": "^18.2.0",
-    "@types/react-dom": "^18.2.0"
-  },
-  "keywords": ["pdf", "reader", "ai", "analysis", "supabase"],
-  "author": "Justice Minds Forensic Intelligence Ltd",
-  "license": "MIT"
+  "version": 2,
+  "builds": [
+    {
+      "src": "index.html",
+      "use": "@vercel/static"
+    }
+  ],
+  "routes": [
+    {
+      "src": "/(.*)",
+      "dest": "/index.html"
+    }
+  ],
+  "headers": [
+    {
+      "source": "/(.*)",
+      "headers": [
+        {
+          "key": "Cross-Origin-Embedder-Policy",
+          "value": "require-corp"
+        },
+        {
+          "key": "Cross-Origin-Opener-Policy",
+          "value": "same-origin"
+        }
+      ]
+    }
+  ],
+  "env": {
+    "VITE_SUPABASE_URL": "https://tvecnfdqakrevzaeifpk.supabase.co",
+    "VITE_SUPABASE_ANON_KEY": "your-anon-key",
+    "VITE_OPENROUTER_API_KEY": "your-api-key"
+  }
 }
