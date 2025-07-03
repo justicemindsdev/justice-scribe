@@ -1,0 +1,364 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PDF Reader AI - Advanced Document Analysis</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <style>
+        :root {
+            --primary-color: #5D5CDE;
+            --border-color: #e2e8f0;
+        }
+        .dark {
+            --border-color: #2d3748;
+        }
+        /* PDF Viewer Styles */
+        #pdf-container {
+            overflow-y: auto;
+            background-color: #f8f9fa;
+        }
+        .dark #pdf-container {
+            background-color: #1a202c;
+        }
+        #pdf-render-container {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        #pdf-render-container canvas {
+            margin-bottom: 10px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.12), 0 1px 2px rgba(0,0,0,0.24);
+        }
+        .dark #pdf-render-container canvas {
+            box-shadow: 0 1px 3px rgba(255,255,255,0.12), 0 1px 2px rgba(255,255,255,0.24);
+        }
+        /* Thumbnails sidebar */
+        #thumbnails-sidebar {
+            width: 200px;
+            overflow-y: auto;
+            background-color: #f0f0f0;
+            border-right: 1px solid var(--border-color);
+            padding: 10px;
+        }
+        .dark #thumbnails-sidebar {
+            background-color: #2d3748;
+        }
+        .thumbnail-container {
+            cursor: pointer;
+            margin-bottom: 10px;
+            position: relative;
+            transition: transform 0.2s;
+        }
+        .thumbnail-container:hover {
+            transform: scale(1.03);
+        }
+        .thumbnail-container.active {
+            border: 2px solid var(--primary-color);
+        }
+        .thumbnail-container canvas {
+            width: 100%;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.12), 0 1px 2px rgba(0,0,0,0.24);
+            border-radius: 3px;
+        }
+        .dark .thumbnail-container canvas {
+            box-shadow: 0 1px 3px rgba(255,255,255,0.12), 0 1px 2px rgba(255,255,255,0.24);
+        }
+        .page-number {
+            position: absolute;
+            bottom: 5px;
+            right: 5px;
+            background-color: rgba(0,0,0,0.7);
+            color: white;
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-size: 12px;
+        }
+        /* Response styles */
+        #response-container {
+            border-left: 1px solid var(--border-color);
+            overflow-y: auto;
+        }
+        .citation-link {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            background-color: var(--primary-color);
+            color: white;
+            width: 1.2rem;
+            height: 1.2rem;
+            font-size: 0.7rem;
+            font-weight: 600;
+            border-radius: 50%;
+            margin: 0 2px;
+            cursor: pointer;
+            text-decoration: none;
+            vertical-align: baseline;
+            transition: all 0.2s ease;
+            border: none;
+            line-height: 1;
+        }
+        .citation-link:hover {
+            background-color: #4a49b8;
+            transform: scale(1.1);
+            box-shadow: 0 2px 4px rgba(93, 92, 222, 0.3);
+        }
+        .citation-link:active {
+            transform: scale(0.95);
+        }
+        .highlight {
+            background-color: rgba(93, 92, 222, 0.3);
+            border-radius: 2px;
+        }
+        .timestamp {
+            font-size: 0.75rem;
+            color: #718096;
+        }
+        .dark .timestamp {
+            color: #a0aec0;
+        }
+        /* Loading animation */
+        .loading-dots {
+            display: inline-flex;
+        }
+        .loading-dots span {
+            width: 8px;
+            height: 8px;
+            margin: 0 3px;
+            border-radius: 50%;
+            background-color: var(--primary-color);
+            animation: dots 1.4s ease-in-out infinite;
+        }
+        .loading-dots span:nth-child(2) {
+            animation-delay: 0.2s;
+        }
+        .loading-dots span:nth-child(3) {
+            animation-delay: 0.4s;
+        }
+        /* File Upload */
+        .file-upload-container {
+            border: 2px dashed #d1d5db;
+            border-radius: 0.5rem;
+            padding: 2rem;
+            text-align: center;
+            margin-bottom: 1rem;
+            transition: border-color 0.3s;
+        }
+        .file-upload-container:hover {
+            border-color: var(--primary-color);
+        }
+        .dark .file-upload-container {
+            border-color: #4b5563;
+        }
+        .dark .file-upload-container:hover {
+            border-color: var(--primary-color);
+        }
+        #file-upload {
+            display: none;
+        }
+        /* Connection Status */
+        .connection-status {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            background: white;
+            padding: 10px 15px;
+            border-radius: 25px;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 12px;
+            font-weight: 600;
+            z-index: 1000;
+        }
+        .status-indicator {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: #dc3545;
+            animation: pulse 2s infinite;
+        }
+        .status-indicator.connected {
+            background: #28a745;
+        }
+        @keyframes pulse {
+            0% { opacity: 1; }
+            50% { opacity: 0.5; }
+            100% { opacity: 1; }
+        }
+        @keyframes dots {
+            0%, 100% {
+                opacity: 0.4;
+                transform: scale(0.8);
+            }
+            50% {
+                opacity: 1;
+                transform: scale(1.2);
+            }
+        }
+        /* Utility classes */
+        .hidden {
+            display: none;
+        }
+    </style>
+</head>
+<body class="antialiased h-screen flex flex-col bg-white text-gray-900 dark:bg-gray-900 dark:text-gray-100">
+    <header class="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 px-4 py-3 shadow-sm">
+        <div class="flex items-center justify-between">
+            <h1 class="text-xl font-bold text-gray-900 dark:text-white flex items-center">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+                </svg>
+                PDF Reader AI
+            </h1>
+            <div class="text-sm text-gray-500 dark:text-gray-400" id="pdf-title">
+                No PDF loaded
+            </div>
+        </div>
+    </header>
+
+    <main class="flex-1 flex flex-col md:flex-row overflow-hidden">
+        <!-- PDF Upload Section (initially visible) -->
+        <section id="upload-container" class="flex-1 flex items-center justify-center p-4">
+            <div class="max-w-md w-full">
+                <div class="file-upload-container">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-12 w-12 mx-auto mb-3 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"></path>
+                    </svg>
+                    <p class="text-lg font-medium mb-2">Upload your PDF document</p>
+                    <p class="text-sm text-gray-500 dark:text-gray-400 mb-4">Drag and drop or click to browse</p>
+                    <input type="file" id="file-upload" accept="application/pdf">
+                    <button id="browse-button" class="px-4 py-2 bg-[#5D5CDE] hover:bg-[#4a49b8] text-white font-medium rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 transition-colors">
+                        Browse Files
+                    </button>
+                </div>
+                
+                <!-- Quick Analysis Templates -->
+                <div class="text-center mt-6">
+                    <p class="text-sm text-gray-500 dark:text-gray-400 mb-3">Quick Analysis Templates:</p>
+                    <div class="grid grid-cols-2 gap-2">
+                        <button class="btn-template px-3 py-2 text-xs bg-gray-100 hover:bg-gray-200 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-300 rounded-md transition-colors" data-template="legal-risks">Legal Risks</button>
+                        <button class="btn-template px-3 py-2 text-xs bg-gray-100 hover:bg-gray-200 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-300 rounded-md transition-colors" data-template="key-terms">Key Terms</button>
+                        <button class="btn-template px-3 py-2 text-xs bg-gray-100 hover:bg-gray-200 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-300 rounded-md transition-colors" data-template="obligations">Obligations</button>
+                        <button class="btn-template px-3 py-2 text-xs bg-gray-100 hover:bg-gray-200 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-300 rounded-md transition-colors" data-template="red-flags">Red Flags</button>
+                        <button class="btn-template px-3 py-2 text-xs bg-gray-100 hover:bg-gray-200 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-300 rounded-md transition-colors" data-template="summary">Summary</button>
+                        <button class="btn-template px-3 py-2 text-xs bg-gray-100 hover:bg-gray-200 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-300 rounded-md transition-colors" data-template="line-analysis">Line Analysis</button>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- PDF Viewer Section (initially hidden) -->
+        <section id="pdf-viewer" class="flex-1 hidden">
+            <div class="flex flex-col md:flex-row h-full">
+                <!-- Left Sidebar -->
+                <div id="left-sidebar" class="hidden md:block w-48 h-full overflow-y-auto bg-f0f0f0 dark:bg-gray-800 border-r border-gray-200 dark:border-gray-700 p-4">
+                    <!-- Thumbnails Sidebar -->
+                    <div id="thumbnails-sidebar">
+                        <h2 class="font-bold text-sm uppercase tracking-wide text-gray-600 dark:text-gray-300 mb-3">Pages</h2>
+                        <div id="thumbnails-container"></div>
+                    </div>
+
+                    <!-- Saved Sessions Sidebar -->
+                    <div id="saved-sessions-sidebar" class="mt-8">
+                        <h2 class="font-bold text-sm uppercase tracking-wide text-gray-600 dark:text-gray-300 mb-3">Saved Chats</h2>
+                        <div id="saved-sessions-container">
+                            <p class="text-xs text-gray-500 dark:text-gray-400">No saved chats yet.</p>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Main PDF Viewer -->
+                <div id="pdf-container" class="flex-1 p-4 overflow-y-auto relative h-full">
+                    <div id="pdf-render-container" class="min-w-full pb-16"></div>
+                </div>
+
+                <!-- Question and Response Section -->
+                <div id="response-container" class="w-full md:w-1/3 flex flex-col border-t md:border-t-0 md:border-l border-gray-200 dark:border-gray-700 h-full">
+                    <!-- Response History -->
+                    <div id="response-history" class="flex-1 p-4 overflow-y-auto">
+                        <div class="flex items-center justify-center h-full text-gray-500 dark:text-gray-400">
+                            <div class="text-center">
+                                <svg xmlns="http://www.w3.org/2000/svg" class="h-12 w-12 mx-auto mb-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                                </svg>
+                                <p>Ask a question about the PDF document</p>
+                                <p class="text-sm mt-2">Your conversation will appear here</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Question Input and Share Button -->
+                    <div class="p-4 border-t border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800">
+                        <div class="flex justify-end mb-2">
+                            <button id="share-chat-button" class="px-3 py-1 text-xs bg-gray-100 hover:bg-gray-200 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-300 rounded-md transition-colors flex items-center">
+                                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.367 2.684 3 3 0 00-5.367-2.684z"></path>
+                                </svg>
+                                Share Chat
+                            </button>
+                        </div>
+                        <form id="question-form" class="flex items-end gap-2">
+                            <div class="flex-1">
+                                <label for="question" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Ask about this PDF</label>
+                                <textarea id="question" rows="2" class="text-base w-full p-3 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:ring-2 focus:ring-primary-500 focus:border-primary-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-white resize-none" placeholder="Type your question here..."></textarea>
+                            </div>
+                            <button type="submit" class="px-4 py-3 bg-[#5D5CDE] hover:bg-[#4a49b8] text-white font-medium rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 transition-colors">
+                                <span>Ask</span>
+                            </button>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <!-- Share Dialogue Modal -->
+    <div id="share-dialogue-modal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 hidden">
+        <div class="bg-white dark:bg-gray-800 rounded-lg p-6 w-full max-w-md shadow-lg">
+            <h3 class="text-lg font-semibold mb-4 text-gray-900 dark:text-white">Share Chat Session</h3>
+            <p class="text-sm text-gray-700 dark:text-gray-300 mb-4">Anyone with this link will be able to view this chat session.</p>
+            <div class="flex items-center border border-gray-300 dark:border-gray-600 rounded-md overflow-hidden mb-4">
+                <input type="text" id="share-link-input" class="flex-1 p-2 text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-white border-none focus:ring-0" readonly>
+                <button id="copy-share-link-button" class="px-4 py-2 bg-[#5D5CDE] hover:bg-[#4a49b8] text-white text-sm font-medium transition-colors">Copy</button>
+            </div>
+            <div class="flex justify-end">
+                <button id="close-share-dialogue-button" class="px-4 py-2 bg-gray-200 hover:bg-gray-300 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-800 dark:text-gray-200 rounded-md transition-colors">Close</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Connection Status -->
+    <div id="connectionStatus" class="connection-status">
+        <span class="status-indicator"></span>
+        <span class="status-text">Disconnected</span>
+    </div>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <!-- Connection Status -->
+    <div id="connectionStatus" class="connection-status">
+        <span class="status-indicator"></span>
+        <span class="status-text">Disconnected</span>
+    </div>
+
+    <!-- Loading Overlay -->
+    <div id="loadingOverlay" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 hidden">
+        <div class="bg-white dark:bg-gray-800 rounded-lg p-6 flex flex-col items-center">
+            <div class="loading-dots mb-4">
+                <span></span>
+                <span></span>
+                <span></span>
+            </div>
+            <p class="text-gray-900 dark:text-white">Processing document...</p>
+        </div>
+    </div>
+
+    <script type="module" src="app.js"></script>
+</body>
+</html>
